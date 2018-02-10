@@ -1,0 +1,15 @@
+[package]
+authors = ["Sebastian Woetzel <wose@zuendmasse.de>"]
+categories = ["embedded", "hardware-support", "no-std"]
+description = "A platform agnostic driver to interface with the BH1750 ambient light sensor"
+keywords = ["embedded-hal", "light", "sensor"]
+license = "MIT OR Apache-2.0"
+name = "bh1750"
+repository = "https://github.com/wose/bh1750"
+version = "0.1.0"
+
+[dependencies]
+embedded-hal = "0.1.0"
+
+[dev-dependencies.linux-embedded-hal]
+git = "https://github.com/japaric/linux-embedded-hal"
