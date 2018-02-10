@@ -4,11 +4,11 @@
 
 ## TODO
 
-- [ ] set measurement mode
+- [X] set measurement mode
 - [ ] allow secondary i2c address
-- [ ] manage sleep mode
+- [X] manage sleep mode
 - [X] read light level
-- [ ] reset
+- [X] reset
 - [ ] adjust sensor sensitivity
 
 ## License

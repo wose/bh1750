@@ -62,6 +62,20 @@ pub enum MeasurementMode {
     OneTimeLRes,
 }
 
+impl MeasurementMode {
+    /// Get command to set mode.
+    fn cmd(&self) -> Command {
+        match *self {
+            MeasurementMode::ContHRes => Command::ContHResMode,
+            MeasurementMode::ContHRes2 => Command::ContHResMode2,
+            MeasurementMode::ContLRes => Command::ContLResMode,
+            MeasurementMode::OneTimeHRes => Command::OneTimeHResMode,
+            MeasurementMode::OneTimeHRes2 => Command::OneTimeHResMode2,
+            MeasurementMode::OneTimeLRes => Command::OneTimeLResMode,
+        }
+    }
+}
+
 /// BH1750 Driver
 pub struct BH1750<I2C, D> {
     mode: MeasurementMode,
@@ -79,16 +93,58 @@ where
         BH1750 { mode: MeasurementMode::OneTimeHRes, i2c, delay }
     }
 
-    pub fn light_level(&mut self) -> Result<u16, E> {
-        self.command(Command::ContHResMode)?;
-        self.delay.delay_ms(180);
-        //self.read_u16()
-        let light = (self.read_u16()? as f32 / 1.2) as u16;
+    /// Measure ambient light level.
+    pub fn light_level(&mut self) -> Result<f32, E> {
+        let cmd = self.mode.cmd();
+        self.command(cmd)?;
+        self.delay();
+        let light = self.read_measurement()?;
         Ok(light)
+    }
+
+    /// Set measurement mode.
+    pub fn set_measurement_mode(&mut self, mode: MeasurementMode) {
+        self.mode = mode;
+    }
+
+    /// Wakeup from sleep mode.
+    pub fn power_on(&mut self) -> Result<(), E> {
+        self.command(Command::PowerOn)
+    }
+
+    /// Stop all measurements and enter sleep mode.
+    pub fn power_down(&mut self) -> Result<(), E> {
+        self.command(Command::PowerDown)
+    }
+
+    /// Reset Data register value.
+    pub fn reset(&mut self) -> Result<(), E> {
+        self.power_on()?;
+        self.reset()
     }
 
     fn command(&mut self, command: Command) -> Result<(), E> {
         self.i2c.write(ADDRESS, &[command.cmd()])
+    }
+
+    fn delay(&mut self) {
+        let delay = match self.mode {
+            MeasurementMode::ContHRes | MeasurementMode::ContHRes2 |
+            MeasurementMode::OneTimeHRes | MeasurementMode::OneTimeHRes2 => 180,
+            _ => 24,
+        };
+
+        self.delay.delay_ms(delay);
+    }
+
+    fn read_measurement(&mut self) -> Result<f32, E> {
+        let value = self.read_u16()?;
+        let light = match self.mode {
+            MeasurementMode::ContHRes | MeasurementMode::OneTimeHRes |
+            MeasurementMode::ContLRes | MeasurementMode::OneTimeLRes => value as f32 / 1.2,
+            MeasurementMode::ContHRes2 | MeasurementMode::OneTimeHRes2 => value as f32 / 2.4,
+        };
+        Ok(light)
     }
 
     fn read_u16(&mut self) -> Result<u16, E> {
