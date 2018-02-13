@@ -4,8 +4,8 @@
 //!
 //! [`embedded-hal`]: https://docs.rs/embedded-hal/~0.1
 
-//#![deny(missing_docs)]
-//#![deny(warnings)]
+#![deny(missing_docs)]
+#![deny(warnings)]
 #![no_std]
 
 extern crate embedded_hal as hal;
@@ -50,30 +50,27 @@ impl Command {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+/// Measurement resolution
+#[derive(Clone, Copy)]
+pub enum Resolution {
+    /// Resolution of 0.5 lx.
+    Lx0_5,
+    /// Resolution of 1.0 lx.
+    Lx1_0,
+    /// Resolution of 4.0 lx.
+    Lx4_0,
+}
+
+/// Measurement mode
+#[derive(Clone, Copy)]
 pub enum MeasurementMode {
-    ContHRes,
-    ContHRes2,
-    ContLRes,
-    OneTimeHRes,
-    OneTimeHRes2,
-    OneTimeLRes,
+    /// Continious measurement.
+    Continious,
+    /// One time measurement and go to sleep mode right after.
+    OneTime,
 }
 
-impl MeasurementMode {
-    /// Get command to set mode.
-    fn cmd(&self) -> Command {
-        match *self {
-            MeasurementMode::ContHRes => Command::ContHResMode,
-            MeasurementMode::ContHRes2 => Command::ContHResMode2,
-            MeasurementMode::ContLRes => Command::ContLResMode,
-            MeasurementMode::OneTimeHRes => Command::OneTimeHResMode,
-            MeasurementMode::OneTimeHRes2 => Command::OneTimeHResMode2,
-            MeasurementMode::OneTimeLRes => Command::OneTimeLResMode,
-        }
-    }
-}
-
+/// I2C address
 #[derive(Clone, Copy)]
 pub enum Address {
     /// The i2c address if the `ADDR` pin is low.
@@ -83,7 +80,7 @@ pub enum Address {
 }
 
 impl Address {
-    pub fn addr(&self) -> u8 {
+    fn addr(&self) -> u8 {
         *self as u8
     }
 }
@@ -92,6 +89,7 @@ impl Address {
 pub struct BH1750<I2C, D> {
     addr: Address,
     mode: MeasurementMode,
+    res: Resolution,
     i2c: I2C,
     delay: D,
 }
@@ -105,7 +103,8 @@ where
     pub fn new(i2c: I2C, delay: D) -> Self {
         BH1750 {
             addr: Address::Low,
-            mode: MeasurementMode::OneTimeHRes,
+            mode: MeasurementMode::OneTime,
+            res: Resolution::Lx1_0,
             i2c: i2c,
             delay: delay
         }
@@ -115,7 +114,8 @@ where
     pub fn with_address(i2c: I2C, delay: D, address: Address) -> Self {
         BH1750 {
             addr: address,
-            mode: MeasurementMode::OneTimeHRes,
+            mode: MeasurementMode::Continious,
+            res: Resolution::Lx1_0,
             i2c: i2c,
             delay: delay
         }
@@ -123,7 +123,7 @@ where
 
     /// Measure ambient light level.
     pub fn light_level(&mut self) -> Result<f32, E> {
-        let cmd = self.mode.cmd();
+        let cmd = self.measurement_command();
         self.command(cmd)?;
         self.delay();
         let light = self.read_measurement()?;
@@ -133,6 +133,11 @@ where
     /// Set measurement mode.
     pub fn set_measurement_mode(&mut self, mode: MeasurementMode) {
         self.mode = mode;
+    }
+
+    /// Set resolution.
+    pub fn set_resolution(&mut self, res: Resolution) {
+        self.res = res;
     }
 
     /// Wakeup from sleep mode.
@@ -156,21 +161,34 @@ where
     }
 
     fn delay(&mut self) {
-        let delay = match self.mode {
-            MeasurementMode::ContHRes | MeasurementMode::ContHRes2 |
-            MeasurementMode::OneTimeHRes | MeasurementMode::OneTimeHRes2 => 180,
-            _ => 24,
+        let delay = match self.res {
+            Resolution::Lx4_0 => 24,
+            _ => 180,
         };
 
         self.delay.delay_ms(delay);
     }
 
+    fn measurement_command(&self) -> Command {
+        match self.mode {
+            MeasurementMode::Continious => match self.res {
+                Resolution::Lx0_5 => Command::ContHResMode2,
+                Resolution::Lx1_0 => Command::ContHResMode,
+                Resolution::Lx4_0 => Command::ContLResMode,
+            },
+            MeasurementMode::OneTime => match self.res {
+                Resolution::Lx0_5 => Command::OneTimeHResMode2,
+                Resolution::Lx1_0 => Command::OneTimeHResMode,
+                Resolution::Lx4_0 => Command::OneTimeLResMode,
+            }
+        }
+    }
+
     fn read_measurement(&mut self) -> Result<f32, E> {
         let value = self.read_u16()?;
-        let light = match self.mode {
-            MeasurementMode::ContHRes | MeasurementMode::OneTimeHRes |
-            MeasurementMode::ContLRes | MeasurementMode::OneTimeLRes => value as f32 / 1.2,
-            MeasurementMode::ContHRes2 | MeasurementMode::OneTimeHRes2 => value as f32 / 2.4,
+        let light = match self.res {
+            Resolution::Lx0_5 => value as f32 / 2.4,
+            _ => value as f32 / 1.2,
         };
         Ok(light)
     }
