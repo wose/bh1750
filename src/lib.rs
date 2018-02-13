@@ -121,8 +121,8 @@ where
         }
     }
 
-    /// Measure ambient light level.
-    pub fn light_level(&mut self) -> Result<f32, E> {
+    /// Measure illuminance.
+    pub fn illuminance(&mut self) -> Result<f32, E> {
         let cmd = self.measurement_command();
         self.command(cmd)?;
         self.delay();

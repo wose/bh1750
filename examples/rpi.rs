@@ -16,7 +16,7 @@ fn main() {
     println!("HiResMode 1.0 lx resolution");
     bh1750.set_resolution(Resolution::Lx1_0);
     for _ in 0..5 {
-        println!("{:>6} lx", bh1750.light_level().unwrap());
+        println!("{:>6} lx", bh1750.illuminance().unwrap());
         thread::sleep(Duration::from_secs(1));
     }
 
@@ -24,14 +24,14 @@ fn main() {
     bh1750.set_resolution(Resolution::Lx0_5);
 
     for _ in 0..5 {
-        println!("{:>6} lx", bh1750.light_level().unwrap());
+        println!("{:>6} lx", bh1750.illuminance().unwrap());
         thread::sleep(Duration::from_secs(1));
     }
 
     println!("LowResMode 4.0 lx resolution");
     bh1750.set_resolution(Resolution::Lx4_0);
     for _ in 0..5 {
-        println!("{:>6} lx", bh1750.light_level().unwrap());
+        println!("{:>6} lx", bh1750.illuminance().unwrap());
         thread::sleep(Duration::from_secs(1));
     }
 }
