@@ -13,8 +13,6 @@ extern crate embedded_hal as hal;
 use hal::blocking::delay::DelayMs;
 use hal::blocking::i2c::{Write, Read};
 
-const ADDRESS: u8 = 0x23;
-
 #[allow(dead_code)]
 #[derive(Copy, Clone)]
 enum Command {
@@ -76,8 +74,23 @@ impl MeasurementMode {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum Address {
+    /// The i2c address if the `ADDR` pin is low.
+    Low = 0x23,
+    /// The i2c address if the `ADDR` pin is high.
+    High = 0x5C,
+}
+
+impl Address {
+    pub fn addr(&self) -> u8 {
+        *self as u8
+    }
+}
+
 /// BH1750 Driver
 pub struct BH1750<I2C, D> {
+    addr: Address,
     mode: MeasurementMode,
     i2c: I2C,
     delay: D,
@@ -90,7 +103,22 @@ where
 {
     /// Creates a new driver from an I2C peripheral.
     pub fn new(i2c: I2C, delay: D) -> Self {
-        BH1750 { mode: MeasurementMode::OneTimeHRes, i2c, delay }
+        BH1750 {
+            addr: Address::Low,
+            mode: MeasurementMode::OneTimeHRes,
+            i2c: i2c,
+            delay: delay
+        }
+    }
+
+    /// Creates a new driver from an I2C peripheral and the given i2c address.
+    pub fn with_address(i2c: I2C, delay: D, address: Address) -> Self {
+        BH1750 {
+            addr: address,
+            mode: MeasurementMode::OneTimeHRes,
+            i2c: i2c,
+            delay: delay
+        }
     }
 
     /// Measure ambient light level.
@@ -124,7 +152,7 @@ where
     }
 
     fn command(&mut self, command: Command) -> Result<(), E> {
-        self.i2c.write(ADDRESS, &[command.cmd()])
+        self.i2c.write(self.addr.addr(), &[command.cmd()])
     }
 
     fn delay(&mut self) {
@@ -149,7 +177,7 @@ where
 
     fn read_u16(&mut self) -> Result<u16, E> {
         let mut buffer = [0, 0];
-        self.i2c.read(ADDRESS, &mut buffer)?;
+        self.i2c.read(self.addr.addr(), &mut buffer)?;
         Ok(((buffer[0] as u16) << 8) + (buffer[1] as u16))
     }
 }

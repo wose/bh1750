@@ -10,6 +10,8 @@ use bh1750::{BH1750, MeasurementMode};
 fn main() {
     let dev = I2cdev::new("/dev/i2c-1").unwrap();
     let mut bh1750 = BH1750::new(dev, Delay);
+    // or with explicit i2c address
+    // let mut bh1750 = BH1750::with_address(dev, Delay, bh1750::Address::Low);
 
     println!("HiResMode");
     bh1750.set_measurement_mode(MeasurementMode::ContHRes);

@@ -5,7 +5,7 @@
 ## TODO
 
 - [X] set measurement mode
-- [ ] allow secondary i2c address
+- [X] allow secondary i2c address
 - [X] manage sleep mode
 - [X] read light level
 - [X] reset
