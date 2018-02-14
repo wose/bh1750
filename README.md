@@ -9,7 +9,7 @@
 - [X] manage sleep mode
 - [X] read light level
 - [X] reset
-- [ ] adjust sensor sensitivity
+- [X] adjust sensor sensitivity (measurement/integration time)
 
 ## License
 

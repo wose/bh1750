@@ -85,10 +85,36 @@ impl Address {
     }
 }
 
+/// Measurement Time
+#[derive(Clone, Copy)]
+pub enum MeasurementTime {
+    /// Default measurement time of 69.
+    Default,
+    /// Custom measurement time (31-254).
+    Custom(u8),
+}
+
+impl MeasurementTime {
+    fn high_byte(&self) -> u8 {
+        match *self {
+            MeasurementTime::Default => Command::ChangeMeasurementTimeHB.cmd() | (69 >> 5),
+            MeasurementTime::Custom(val) => Command::ChangeMeasurementTimeHB.cmd() | (val >> 5),
+        }
+    }
+
+    fn low_byte(&self) -> u8 {
+        match *self {
+            MeasurementTime::Default => Command::ChangeMeasurementTimeLB.cmd() | (69 & 0b000_11111),
+            MeasurementTime::Custom(val) => Command::ChangeMeasurementTimeLB.cmd() | (val & 0b000_11111),
+        }
+    }
+}
+
 /// BH1750 Driver
 pub struct BH1750<I2C, D> {
     addr: Address,
     mode: MeasurementMode,
+    mt: MeasurementTime,
     res: Resolution,
     i2c: I2C,
     delay: D,
@@ -97,13 +123,14 @@ pub struct BH1750<I2C, D> {
 impl <I2C, D, E> BH1750<I2C, D>
 where
     I2C: Read<Error = E> + Write<Error = E>,
-    D: DelayMs<u8>,
+    D: DelayMs<u16>,
 {
     /// Creates a new driver from an I2C peripheral.
     pub fn new(i2c: I2C, delay: D) -> Self {
         BH1750 {
             addr: Address::Low,
             mode: MeasurementMode::OneTime,
+            mt: MeasurementTime::Default,
             res: Resolution::Lx1_0,
             i2c: i2c,
             delay: delay
@@ -115,6 +142,7 @@ where
         BH1750 {
             addr: address,
             mode: MeasurementMode::Continious,
+            mt: MeasurementTime::Default,
             res: Resolution::Lx1_0,
             i2c: i2c,
             delay: delay
@@ -135,6 +163,15 @@ where
         self.mode = mode;
     }
 
+    /// Set measurement time.
+    pub fn set_measurement_time(&mut self, mt: MeasurementTime) -> Result<(), E> {
+        // Sensor doesn't support multiple commands without stop condition.
+        self.i2c.write(self.addr.addr(), &[mt.high_byte()])?;
+        self.i2c.write(self.addr.addr(), &[mt.low_byte()])?;
+        self.mt = mt;
+        Ok(())
+    }
+
     /// Set resolution.
     pub fn set_resolution(&mut self, res: Resolution) {
         self.res = res;
@@ -153,7 +190,7 @@ where
     /// Reset Data register value.
     pub fn reset(&mut self) -> Result<(), E> {
         self.power_on()?;
-        self.reset()
+        self.command(Command::Reset)
     }
 
     fn command(&mut self, command: Command) -> Result<(), E> {
@@ -163,7 +200,14 @@ where
     fn delay(&mut self) {
         let delay = match self.res {
             Resolution::Lx4_0 => 24,
-            _ => 180,
+            _ => match self.mt {
+                MeasurementTime::Default => 180,
+                // If the measurement time is doubled we need to double the delay as well.
+                MeasurementTime::Custom(mt) => {
+                    let scaling = mt as f32 / 69.0;
+                    (180.0 * scaling) as u16
+                },
+            },
         };
 
         self.delay.delay_ms(delay);
@@ -185,10 +229,16 @@ where
     }
 
     fn read_measurement(&mut self) -> Result<f32, E> {
-        let value = self.read_u16()?;
+        let value = self.read_u16()? as f32 / 1.2;
+        let scaling = match self.mt {
+            MeasurementTime::Default => 1.0,
+            MeasurementTime::Custom(mt) => 69.0 / mt as f32,
+        };
+
         let light = match self.res {
-            Resolution::Lx0_5 => value as f32 / 2.4,
-            _ => value as f32 / 1.2,
+            Resolution::Lx0_5 => value / 2.0 * scaling,
+            Resolution::Lx1_0 => value * scaling,
+            Resolution::Lx4_0 => value,
         };
         Ok(light)
     }
